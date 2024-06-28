@@ -1,5 +1,7 @@
 from pytubefix import YouTube, Playlist, Channel
 from pytubefix.cli import on_progress
+import ffmpeg
+import os
 
 
 def _download_streams(yt, path: str, audio_only: bool) -> None:
@@ -8,9 +10,24 @@ def _download_streams(yt, path: str, audio_only: bool) -> None:
         ys = ys.get_audio_only()
         ys.download(output_path=path, mp3=True)
     else:
-        ys = yt.streams
-        ys = ys.get_highest_resolution()
-        ys.download(output_path=path)
+        try:  
+            ys = yt.streams
+            video_stream = ys.filter(res='1080p', progressive=False).first()
+            audio_stream = ys.filter(progressive=False).first()
+            video_stream.download(filename='temp_video.mp4')
+            audio_stream.download(filename='temp_audio.mp3')
+            audio = ffmpeg.input('temp_audio.mp3')
+            video = ffmpeg.input('temp_video.mp4')
+            filename = os.path.join(path, yt.title + '.mp4')
+            ffmpeg.output(audio, video, filename).run(overwrite_output=True)
+            os.remove('temp_video.mp4')
+            os.remove('temp_audio.mp3')
+        except:
+            print("Failed")
+            ys = yt.streams
+            ys = ys.get_highest_resolution()
+            ys.download(output_path=path)
+        
          
 def download_video(url: str, path: str, audio_only: bool = False) -> None:
     try:
