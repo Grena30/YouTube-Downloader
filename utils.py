@@ -1,7 +1,7 @@
 from pytubefix import YouTube, Playlist, Channel
 from pytubefix.cli import on_progress
-import ffmpeg
 import os
+import subprocess
 
 
 def _download_streams(yt, path: str, audio_only: bool) -> None:
@@ -10,20 +10,29 @@ def _download_streams(yt, path: str, audio_only: bool) -> None:
         ys = ys.get_audio_only()
         ys.download(output_path=path, mp3=True)
     else:
-        try:  
+        try:
+            print("Using ffmpeg method to merge audio and video streams")
             ys = yt.streams
             video_stream = ys.filter(res='1080p', progressive=False).first()
-            audio_stream = ys.filter(progressive=False).first()
-            video_stream.download(filename='temp_video.mp4')
-            audio_stream.download(filename='temp_audio.mp3')
-            audio = ffmpeg.input('temp_audio.mp3')
-            video = ffmpeg.input('temp_video.mp4')
+            audio_stream = ys.get_audio_only()
+            video_stream.download(filename=f"{yt.title}_video.mp4", output_path=path)
+            audio_stream.download(filename=f"{yt.title}_audio", output_path=path, mp3=True)
             filename = os.path.join(path, yt.title + '.mp4')
-            ffmpeg.output(audio, video, filename).run(overwrite_output=True)
-            os.remove('temp_video.mp4')
-            os.remove('temp_audio.mp3')
+            
+            ffmpeg_command = [
+                'ffmpeg',
+                '-i', f'{path}{yt.title}_video.mp4',
+                '-i', f'{path}{yt.title}_audio.mp3',
+                '-c:v', 'copy',
+                '-c:a', 'aac',
+                filename
+            ]
+            subprocess.run(ffmpeg_command, check=True)
+                
+            os.remove(f'{path}{yt.title}_video.mp4')
+            os.remove(f'{path}{yt.title}_audio.mp3')
         except:
-            print("Failed")
+            print("Using default method to download streams")
             ys = yt.streams
             ys = ys.get_highest_resolution()
             ys.download(output_path=path)
@@ -32,7 +41,7 @@ def _download_streams(yt, path: str, audio_only: bool) -> None:
 def download_video(url: str, path: str, audio_only: bool = False) -> None:
     try:
         yt = YouTube(url, on_progress_callback=on_progress)
-        print(yt.title)
+        print(f"YouTube title: {yt.title}")
         _download_streams(yt, path, audio_only)
     except Exception as e:
         print(f"Error downloading video: {e}")

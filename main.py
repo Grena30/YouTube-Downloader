@@ -2,6 +2,7 @@ from utils import download_channel, download_playlist, download_video
 import argparse
 from pathlib import Path
 
+
 DOWNLOAD_PATH: str = "Downloads\YouTube\\" # Change this to your download path
 
 def main() -> None:
