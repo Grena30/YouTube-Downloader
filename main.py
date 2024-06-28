@@ -2,6 +2,7 @@ from utils import download_channel, download_playlist, download_video
 import argparse
 from pathlib import Path
 
+
 DOWNLOAD_PATH: str = "Downloads\YouTube\\" # Change this to your download path
 
 def main() -> None:
@@ -22,7 +23,7 @@ def main() -> None:
         print("Directory already exists")
     
     if DOWNLOAD_PATH == "Downloads\YouTube\\":
-        print(f"Videos will be downloaded to default path {DOWNLOAD_PATH}.")
+        print(f"Streams will be downloaded to default path {DOWNLOAD_PATH}.")
         
     if args.u:
         download_video(args.url, path=DOWNLOAD_PATH, audio_only=args.a)
