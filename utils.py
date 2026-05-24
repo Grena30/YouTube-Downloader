@@ -1,98 +1,69 @@
-from pytubefix import YouTube, Playlist, Channel
-from pytubefix.cli import on_progress
-import os
-import subprocess
+import yt_dlp
+import shutil
+
+from pathlib import Path
 
 
-def is_ffmpeg_available() -> bool:
-    try:
-        subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return True
-    except FileNotFoundError:
-        return False
+class YouTubeDownloader:
+    def __init__(
+        self,
+        download_path: Path,
+        audio_only: bool = False,
+        max_resolution: str = "best",
+    ):
+        self.download_path = download_path
+        self.audio_only = audio_only
+        self.max_resolution = max_resolution
+        self.ffmpeg_available = self._is_ffmpeg_available()
 
-def _download_streams(yt, path: str, audio_only: bool) -> None:
-    if audio_only:
-        ys = yt.streams
-        ys = ys.get_audio_only()
-        ys.download(output_path=path, mp3=True)
-    else:
-        if is_ffmpeg_available():
-            ys = yt.streams
-            video_stream = ys.filter(res='1080p', progressive=False).first()
-            audio_stream = ys.get_audio_only()
-            video_stream.download(filename=f"{yt.title}_video.mp4", output_path=path)
-            audio_stream.download(filename=f"{yt.title}_audio", output_path=path, mp3=True)
-            filename = os.path.join(path, yt.title + '.mp4')
-            
-            ffmpeg_command = [
-                'ffmpeg',
-                '-i', f'{path}{yt.title}_video.mp4',
-                '-i', f'{path}{yt.title}_audio.mp3',
-                '-c:v', 'copy',
-                '-c:a', 'aac',
-                filename
-            ]
-            subprocess.run(ffmpeg_command, check=True)
-                
-            os.remove(f'{path}{yt.title}_video.mp4')
-            os.remove(f'{path}{yt.title}_audio.mp3')
+        if not self.ffmpeg_available and not self.audio_only:
+            print(
+                "Warning: FFmpeg is not detected in your system PATH. Videos may be limited to lower resolutions."
+            )
+
+    def _is_ffmpeg_available(self) -> bool:
+        return shutil.which("ffmpeg") is not None
+
+    def download(self, url: str) -> None:
+        ydl_opts = {
+            "outtmpl": str(self.download_path / "%(title)s.%(ext)s"),
+            "noplaylist": False,
+            "quiet": False,
+        }
+
+        if self.audio_only:
+            ydl_opts.update(
+                {
+                    "format": "bestaudio/best",
+                    "postprocessors": [
+                        {
+                            "key": "FFmpegExtractAudio",
+                            "preferredcodec": "mp3",
+                            "preferredquality": "192",
+                        }
+                    ],
+                }
+            )
         else:
-            ys = yt.streams
-            ys = ys.get_highest_resolution()
-            ys.download(output_path=path)
-        
-         
-def download_video(url: str, path: str, audio_only: bool = False) -> None:
-    try:
-        if is_ffmpeg_available():
-            print("FFmpeg is available")
-            
-        yt = YouTube(url, on_progress_callback=on_progress)
-        print(f"YouTube title: {yt.title}")
-            
-        _download_streams(yt, path, audio_only)
-    except Exception as e:
-        print(f"Error downloading video: {e}")
+            if self.max_resolution == "best":
+                video_format = (
+                    "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+                )
+            else:
+                video_format = f"bestvideo[height<={self.max_resolution}][ext=mp4]+bestaudio[ext=m4a]/best[height<={self.max_resolution}][ext=mp4]/best"
 
-def download_playlist(url: str, path: str, audio_only: bool = False) -> None:
-    try:
-        if is_ffmpeg_available():
-            print("FFmpeg is available")
-            
-        pl = Playlist(url)
-        print(f'Playlist name: {pl.title}')
-        
-        video_count = len(pl.videos)
-        print(f'Downloading... {video_count} videos found')
-        
-        for video in pl.videos:
-            print(f'{video.title}, left: {video_count}')
-            try:
-                _download_streams(video, path, audio_only)
-            except Exception as e:
-                print(f"Error downloading video {video.title}: {e}")
-            video_count -= 1
-    except Exception as e:
-        print(f"Error processing playlist: {e}")
+            ydl_opts.update(
+                {
+                    "format": video_format,
+                    "merge_output_format": "mp4",
+                }
+            )
 
-def download_channel(url: str, path: str, audio_only: bool = False) -> None:
-    try:
-        if is_ffmpeg_available():
-            print("FFmpeg is available")
-            
-        ch = Channel(url)
-        print(f'Channel name: {ch.channel_name}')
-        
-        video_count = len(ch.videos)
-        print(f'Downloading... {video_count} videos found')
-        
-        for video in ch.videos:
-            print(f'{video.title}, left: {video_count}')
-            try:
-                _download_streams(video, path, audio_only)
-            except Exception as e:
-                print(f"Error downloading video {video.title}: {e}")
-            video_count -= 1
-    except Exception as e:
-        print(f"Error processing channel: {e}")
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                print(f"Fetching data for: {url}")
+                ydl.download([url])
+            print("\nDownload completed successfully!")
+
+        except Exception as e:
+            print(f"\nAn error occurred during download: {e}")

@@ -1,38 +1,68 @@
-from utils import download_channel, download_playlist, download_video
 import argparse
+
 from pathlib import Path
+from utils import YouTubeDownloader
 
+DEFAULT_DOWNLOAD_PATH = Path.home() / "Downloads" / "YouTube"
 
-DOWNLOAD_PATH: str = "Downloads\YouTube\\" # Change this to your download path
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Download videos, audios, playlists, or channels from YouTube.")
-    parser.add_argument("url", metavar="\"URL\"", type=str, help="The URL of the video, playlist, or channel to download. Enclose the URL in quotes.")
-    parser.add_argument("-a", action="store_true", help="Download audio only.")
-    
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-u", action="store_true", help="Download video.")
-    group.add_argument("-p", action="store_true", help="Download a playlist.")
-    group.add_argument("-c", action="store_true", help="Download all videos from a channel.")
-    
+    parser = argparse.ArgumentParser(
+        description="A robust YouTube downloader using yt-dlp."
+    )
+
+    parser.add_argument(
+        "url",
+        metavar="URL",
+        type=str,
+        help="The URL of the video, playlist, or channel to download.",
+    )
+
+    parser.add_argument(
+        "-a",
+        "--audio",
+        action="store_true",
+        help="Download audio only (converted to MP3).",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=str(DEFAULT_DOWNLOAD_PATH),
+        help=f"Output directory path. (Default: {DEFAULT_DOWNLOAD_PATH})",
+    )
+
+    parser.add_argument(
+        "-r",
+        "--resolution",
+        type=str,
+        default="best",
+        choices=["best", "2160", "1440", "1080", "720", "480", "360"],
+        help="Set a maximum resolution height (e.g., 1080, 720). Default is 'best'.",
+    )
+
     args = parser.parse_args()
-    
-    try:
-        Path(DOWNLOAD_PATH).mkdir(parents=True)
-    except FileExistsError:
-        print("Directory already exists")
-    
-    if DOWNLOAD_PATH == "Downloads\YouTube\\":
-        print(f"Streams will be downloaded to default path {DOWNLOAD_PATH}.")
-        
-    if args.u:
-        download_video(args.url, path=DOWNLOAD_PATH, audio_only=args.a)
-    elif args.p:
-        download_playlist(args.url, path=DOWNLOAD_PATH, audio_only=args.a)
-    elif args.c:
-        download_channel(args.url, path=DOWNLOAD_PATH, audio_only=args.a)
+
+    download_path = Path(args.output)
+    download_path.mkdir(parents=True, exist_ok=True)
+
+    print(f"Initializing download...")
+    print(f"Destination: {download_path}")
+
+    if args.audio:
+        print("Mode: Audio Only")
     else:
-        print("Invalid combination of arguments.")
-        
-if __name__ == "__main__":  
+        print(
+            f"Max Resolution: {args.resolution if args.resolution != 'best' else 'Uncapped (Highest available)'}"
+        )
+
+    downloader = YouTubeDownloader(
+        download_path=download_path,
+        audio_only=args.audio,
+        max_resolution=args.resolution,
+    )
+    downloader.download(args.url)
+
+
+if __name__ == "__main__":
     main()
